@@ -144,7 +144,9 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     }
 
     // Until convergence-
-    for (int i = 0; i <1000 ; ++i) {
+    for(int i=0;i<1000;i++) {
+//        printf("%d\n",i);
+        i++;
         float**  Q;
         Q = (float**) malloc(sizeof(float *) * M);
         for(int i = 0;i<M;i++){
@@ -159,24 +161,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
         QR_decomposition(D_not,Q,R);
 
-//        if (i==0){
-//            for (int i = 0; i <M ; ++i) {
-//                for (int j = 0; j <M ; ++j) {
-//                    printf("%f\n",D_not[i][j]);
-//                }
-//            }
-//
-//            for (int i = 0; i <M ; ++i) {
-//                for (int j = 0; j <M ; ++j) {
-//                    float a=0;
-//                    for (int k = 0; k <M ; ++k) {
-//                        a+=Q[i][k]*R[k][j];
-//                    }
-//                    printf("%f\n",a);
-//                }
-//            }
-//
-//        }
+        float D_not_new[M][M];
 
         for (int i = 0; i <M ; ++i) {
             for (int j = 0; j <M ; ++j) {
@@ -187,6 +172,22 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
                 D_not[i][j]=a;
             }
         }
+
+//        int count=0;
+//        for (int i = 0; i <M ; ++i) {
+//            for (int j = 0; j <M ; ++j) {
+//                if (abs(D_not_new[i][j]-D_not[i][j])<=0.001) count++;
+//                else break;
+//            }
+//        }
+//        printf("%d\n",count);
+//        if (count==M*M) break;
+
+//        for (int i = 0; i <M ; ++i) {
+//            for (int j = 0; j <M ; ++j) {
+//                D_not[i][j]==D_not_new[i][j];
+//            }
+//        }
 
         float E_new[M][M];
 
@@ -306,6 +307,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
     for (int i = 0; i <N ; ++i) {
         SIGMA[0][i]=sigma[i][i];
+        printf("%f\n",SIGMA[0][i]);
     }
 
     for (int i = 0; i <N ; ++i) {
@@ -317,7 +319,6 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     for (int i = 0; i <M ; ++i) {
         for (int j = 0; j <M ; ++j) {
             V_T[0][M*i+j]=V_Tnew[i][j];
-            printf("%f\n",V_T[0][M*i+j]);
         }
     }
 
@@ -336,4 +337,55 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
 void PCA(int retention, int M, int N, float* D, float* U, float* SIGMA, float** D_HAT, int *K)
 {
+    float sum_eigen_values = 0;
+
+    for (int i = 0; i <N ; ++i) {
+        sum_eigen_values+=SIGMA[i];
+    }
+
+    int count=0;
+    float sum=0;
+    for (int i = 0; i <N ; ++i) {
+        count+=1;
+        sum+=SIGMA[i];
+        if ((sum/sum_eigen_values)*100>=retention) break;
+    }
+
+    *K=count;
+
+    float D_hat[M][count];
+
+    float D_new[M][N];
+    float U_new[N][N];
+
+    for (int i = 0; i < M; ++i) {
+        for (int j = 0; j < N; ++j) {
+            D_new[i][j]=D[N*i+j];
+        }
+    }
+
+    for (int i = 0; i < N; ++i) {
+        for (int j = 0; j < N; ++j) {
+            U_new[i][j]=U[N*i+j];
+        }
+    }
+
+    for (int i = 0; i < M; ++i) {
+        for (int j = 0; j <count ; ++j) {
+            float a=0;
+            for (int k = 0; k <N ; ++k) {
+                a+=D_new[i][k]*U_new[k][j];
+            }
+            D_hat[i][j]=a;
+        }
+    }
+
+    D_HAT[0] = (float*) malloc(sizeof(float) * M*count);
+
+    for (int i = 0; i <M ; ++i) {
+        for (int j = 0; j <count ; ++j) {
+            D_HAT[0][M*i+j]=D_hat[i][j];
+        }
+    }
+
 }

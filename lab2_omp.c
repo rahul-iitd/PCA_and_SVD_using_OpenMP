@@ -6,7 +6,7 @@
 int N,M;
 
 
-void QR_decomposition(float** D_not,float** Q,float** R)
+void QR_decomposition(double** D_not,double** Q,double** R)
 {
     for (int i = 0; i <M ; ++i) {
         for (int j = 0; j <M; ++j) {
@@ -14,9 +14,9 @@ void QR_decomposition(float** D_not,float** Q,float** R)
             R[i][j]=0;
         }
     }
-    float U[M][M];
-    float U_square[M];
-    float sqrt_U_square[M];
+    double U[M][M];
+    double U_square[M];
+    double sqrt_U_square[M];
 
     for (int i = 0; i <M ; ++i) {
         U[i][0]=D_not[i][0];
@@ -29,8 +29,7 @@ void QR_decomposition(float** D_not,float** Q,float** R)
         }
 
         for (int j = 0; j <i ; ++j) {
-            float proj[M];
-            float a=0;
+            double a=0;
 
             if (j==i-1){
                 U_square[j]=0;
@@ -72,13 +71,59 @@ void QR_decomposition(float** D_not,float** Q,float** R)
         for (int j = 0; j <M ; ++j) {
             if (i>j) R[i][j]=0;
             else{
-                float a=0;
+                double a=0;
                 for (int k = 0; k <M ; ++k) {
                     a+=Q[k][i]*D_not[k][j];
                 }
                 R[i][j]=a;
             }
         }
+    }
+
+}
+
+
+
+
+void QR_decomposition_modified(double** D_not,double** Q,double** R)
+{
+
+    double V[M][M];
+
+#pragma omp parallel for num_threads(4)
+    for (int i = 0; i < M; ++i) {
+        for (int j = 0; j < M; ++j) {
+            V[i][j] = D_not[i][j];
+        }
+    }
+
+
+    for (int i = 0; i <M ; ++i) {
+        double a=0;
+        for (int j = 0; j <M ; ++j) {
+            a+=V[j][i]*V[j][i];
+        }
+        a=sqrt(a);
+
+        R[i][i]=a;
+
+        for (int j = 0; j <M ; ++j) {
+            Q[j][i]=V[j][i]/a;
+        }
+
+        for (int j = i+1; j <M ; ++j) {
+            double b=0;
+            for (int k = 0; k <M ; ++k) {
+                b+=Q[k][i]*V[k][j];
+            }
+
+            R[i][j]=b;
+
+            for (int k = 0; k <M ; ++k) {
+                V[k][j]=V[k][j]-b*Q[k][i];
+            }
+        }
+
     }
 
 }
@@ -97,12 +142,14 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     float V_new[M][M];
     float V_Tnew[M][M];
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j < N; ++j) {
             D_new[i][j]=D[N*i+j];
         }
     }
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <N ; ++i) {
         for (int j = 0; j <M ; ++j) {
             D_new_T[i][j]=D_new[j][i];
@@ -114,6 +161,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
     float D_T_D[M][M];
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <M ; ++i) {
         for (int j = 0; j <M ; ++j) {
             float a=0;
@@ -127,11 +175,12 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     // Now we have to find the eigen values of D_T_D by using QR method.
 
 
-    float E[M][M];
-    float**  D_not;
-    D_not = (float**) malloc(sizeof(float *) * M);
+    double E[M][M];
+    double**  D_not;
+    double D_not_old[M][M];
+    D_not = (double**) malloc(sizeof(double *) * M);
     for(int i = 0;i<M;i++){
-        D_not[i]=(float*) malloc(sizeof(float) * M);
+        D_not[i]=(double*) malloc(sizeof(double) * M);
     }
 
 
@@ -142,46 +191,105 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
             else E[i][j]=0;
         }
     }
-
+    int c=0;
     // Until convergence-
-    for(int i=0;i<1000;i++) {
+    while(true){
+        c++;
+//        if (c>1) break;
 //        printf("%d\n",i);
-        i++;
-        float**  Q;
-        Q = (float**) malloc(sizeof(float *) * M);
+        double**  Q;
+        Q = (double**) malloc(sizeof(double *) * M);
         for(int i = 0;i<M;i++){
-            Q[i]=(float*) malloc(sizeof(float) * M);
+            Q[i]=(double*) malloc(sizeof(double) * M);
         }
 
-        float**  R;
-        R = (float**) malloc(sizeof(float *) * M);
+        double**  R;
+        R = (double**) malloc(sizeof(double *) * M);
         for(int i = 0;i<M;i++){
-            R[i]=(float*) malloc(sizeof(float) * M);
+            R[i]=(double*) malloc(sizeof(double) * M);
         }
 
-        QR_decomposition(D_not,Q,R);
+        QR_decomposition_modified(D_not,Q,R);
 
-        float D_not_new[M][M];
+//        if (c==1){
+//            for (int i = 0; i <M ; ++i) {
+//                for (int j = 0; j <M ; ++j) {
+//                    printf("%f ",Q[i][j]);
+//                }
+//                printf("\n");
+//            }
+//            printf("\n");
+//            for (int i = 0; i <M ; ++i) {
+//                for (int j = 0; j <M ; ++j) {
+//                    printf("%f ",R[i][j]);
+//                }
+//                printf("\n");
+//            }
+//            printf("\n");
+//        }
 
+
+#pragma omp parallel for num_threads(4)
         for (int i = 0; i <M ; ++i) {
             for (int j = 0; j <M ; ++j) {
-                float a=0;
+                D_not_old[i][j]=D_not[i][j];
+//                printf("%f\n",D_not_old[i][j]);
+            }
+        }
+
+#pragma omp parallel for num_threads(4)
+        for (int i = 0; i <M ; ++i) {
+            for (int j = 0; j <M ; ++j) {
+                double a=0;
                 for (int k = 0; k <M; ++k) {
                     a+=R[i][k]*Q[k][j];
                 }
                 D_not[i][j]=a;
+//                if (c%10==0) printf("%f\n",a);
             }
         }
 
-//        int count=0;
+        int count=0;
 //        for (int i = 0; i <M ; ++i) {
 //            for (int j = 0; j <M ; ++j) {
-//                if (abs(D_not_new[i][j]-D_not[i][j])<=0.001) count++;
-//                else break;
+////                if (c%10==0){
+////                    printf("%f\n",D_not_old[1][1]);
+////                    printf("%f\n",D_not[1][1]);
+////                }
+//                if (abs(D_not_old[i][j]-D_not[i][j])<=0.001){
+//                    count++;
+////                    printf("%f\n",D_not_old[i][j]);
+////                    printf("%f\n",D_not[i][j]);
+//                }
+////                else break;
 //            }
 //        }
+#pragma omp parallel for num_threads(4)
+        for (int i = 0; i <M ; ++i) {
+            if (abs(D_not_old[i][i]-D_not[i][i])<=0.001) count++;
+        }
+
+//        if (true){
+//            for (int i = 0; i <M ; ++i) {
+//                for (int j = 0; j <M ; ++j) {
+//                    printf("%f ",D_not_old[i][j]);
+//                }
+//                printf("\n");
+//            }
+//            printf("\n");
+//            for (int i = 0; i <M ; ++i) {
+//                for (int j = 0; j <M ; ++j) {
+//                    printf("%f ",D_not[i][j]);
+//                }
+//                printf("\n");
+//            }
+//            printf("\n");
+//        }
+
 //        printf("%d\n",count);
-//        if (count==M*M) break;
+//        printf("%d\n",count2);
+//        printf("%d\n",c);
+        if (count==M) break;
 
 //        for (int i = 0; i <M ; ++i) {
 //            for (int j = 0; j <M ; ++j) {
@@ -189,11 +297,12 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 //            }
 //        }
 
-        float E_new[M][M];
+        double E_new[M][M];
 
+#pragma omp parallel for num_threads(4)
         for (int i = 0; i <M ; ++i) {
             for (int j = 0; j <M; ++j) {
-                float a=0;
+                double a=0;
                 for (int k = 0; k <M; ++k) {
                     a+=E[i][k]*Q[k][j];
                 }
@@ -201,6 +310,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
             }
         }
 
+#pragma omp parallel for num_threads(4)
         for (int i = 0; i <M ; ++i) {
             for (int j = 0; j <M ; ++j) {
                 E[i][j]=E_new[i][j];
@@ -209,18 +319,21 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
     }
 
-    float eigen_values[M];
+//    printf("%d\n",c);
 
+    double eigen_values[M];
+
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <M ; ++i) {
         eigen_values[i]=abs(D_not[i][i]);
+//        printf("%f\n",eigen_values[i]);
     }
 
-    //printing eigen values to check
-    for (int i = 0; i <M ; ++i) {
-    }
 
-    float sqrt_eigen_values[M];
 
+    double sqrt_eigen_values[M];
+
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <M ; ++i) {
         sqrt_eigen_values[i]=sqrt(eigen_values[i]);
     }
@@ -228,8 +341,9 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
     float sorted_singular_values[M];    // taking only first N eigen values in decending order.
 
     // Sorting the eigen values and computing the matrix V
+
     for (int i = 0; i <M ; ++i) {
-        float max=0;
+        double max=0;
         int index=0;
         for (int j = 0; j <M ; ++j) {
             if (sqrt_eigen_values[j]>max){
@@ -244,18 +358,19 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
         sqrt_eigen_values[index]=0;
     }
 
-    for (int i = 0; i <M ; ++i) {
-        for (int j = 0; j <M ; ++j) {
-        }
-    }
 
+
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <N ; ++i) {
         for (int j = 0; j <M ; ++j) {
             sigma[i][j]=0;
         }
     }
 
+
+
     // Computing matrix sigma
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <N ; ++i) {
         sigma[i][i]=sorted_singular_values[i];
 
@@ -263,6 +378,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
 
     //Computing V transpose
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <M ; ++i) {
         for (int j = 0; j <M ; ++j) {
             V_Tnew[j][i]=V_new[i][j];
@@ -274,10 +390,11 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
     float sigma_inv[M][N];
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <M ; ++i) {
         for (int j = 0; j <N ; ++j) {
-            if (i!=j) sigma_inv[i][j]==0;
-            else sigma_inv[i][j]=sorted_singular_values[i];
+            if (i!=j) sigma_inv[i][j]=0;
+            else sigma_inv[i][j]=(1/sorted_singular_values[j]);
         }
     }
 
@@ -285,6 +402,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
     float intermediate[N][M];
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <N ; ++i) {
         for (int j = 0; j <M ; ++j) {
             float a=0;
@@ -295,6 +413,7 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
         }
     }
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <N ; ++i) {
         for (int j = 0; j <N ; ++j) {
             float a=0;
@@ -305,22 +424,81 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
         }
     }
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <N ; ++i) {
         SIGMA[0][i]=sigma[i][i];
-        printf("%f\n",SIGMA[0][i]);
     }
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <N ; ++i) {
         for (int j = 0; j <N ; ++j) {
             U[0][N*i+j]=U_new[i][j];
         }
     }
 
+//    for (int i = 0; i <M ; ++i) {
+//        for (int j = 0; j <M ; ++j) {
+//            printf("%f ",intermediate[i][j]);
+//        }
+//        printf("\n");
+//    }
+//    printf("\n");
+//
+//    for (int i = 0; i <M ; ++i) {
+//        for (int j = 0; j <N ; ++j) {
+//            printf("%f ",sigma_inv[i][j]);
+//        }
+//        printf("\n");
+//    }
+//    printf("\n");
+
+
+//    for (int i = 0; i <N ; ++i) {
+//        for (int j = 0; j <N ; ++j) {
+//            printf("%f ",U_new[i][j]);
+//        }
+//        printf("\n");
+//    }
+//    printf("\n");
+
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i <M ; ++i) {
         for (int j = 0; j <M ; ++j) {
             V_T[0][M*i+j]=V_Tnew[i][j];
         }
     }
+
+//    float result[N][M];
+//    float inter[N][M];
+//    for (int i = 0; i <N ; ++i) {
+//        for (int j = 0; j <M ; ++j) {
+//            float a=0;
+//            for (int k = 0; k <N ; ++k) {
+//                a+=U_new[i][k]*sigma[k][j];
+//            }
+//            inter[i][j]=a;
+//        }
+//    }
+//
+//    for (int i = 0; i <N ; ++i) {
+//        for (int j = 0; j <M ; ++j) {
+//            float a=0;
+//            for (int k = 0; k <M ; ++k) {
+//                a+=inter[i][k]*V_Tnew[k][j];
+//            }
+//            result[i][j]=a;
+//        }
+//    }
+//
+//    for (int i = 0; i <M ; ++i) {
+//        for (int j = 0; j <N ; ++j) {
+//            printf("%f ",result[j][i]);
+//        }
+//        printf("\n");
+//    }
+//    printf("\n");
+
+
 
 }
 
@@ -328,11 +506,6 @@ void SVD(int M, int N, float* D, float** U, float** SIGMA, float** V_T)
 
 
 
-// /*
-// 	*****************************************************
-// 		TODO -- You must implement this function
-// 	*****************************************************
-// */
 
 
 void PCA(int retention, int M, int N, float* D, float* U, float* SIGMA, float** D_HAT, int *K)
@@ -340,14 +513,14 @@ void PCA(int retention, int M, int N, float* D, float* U, float* SIGMA, float** 
     float sum_eigen_values = 0;
 
     for (int i = 0; i <N ; ++i) {
-        sum_eigen_values+=SIGMA[i];
+        sum_eigen_values+=SIGMA[i]*SIGMA[i];
     }
 
     int count=0;
     float sum=0;
     for (int i = 0; i <N ; ++i) {
         count+=1;
-        sum+=SIGMA[i];
+        sum+=SIGMA[i]*SIGMA[i];
         if ((sum/sum_eigen_values)*100>=retention) break;
     }
 
@@ -358,18 +531,21 @@ void PCA(int retention, int M, int N, float* D, float* U, float* SIGMA, float** 
     float D_new[M][N];
     float U_new[N][N];
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j < N; ++j) {
             D_new[i][j]=D[N*i+j];
         }
     }
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i < N; ++i) {
         for (int j = 0; j < N; ++j) {
             U_new[i][j]=U[N*i+j];
         }
     }
 
+#pragma omp parallel for num_threads(4)
     for (int i = 0; i < M; ++i) {
         for (int j = 0; j <count ; ++j) {
             float a=0;
@@ -384,8 +560,14 @@ void PCA(int retention, int M, int N, float* D, float* U, float* SIGMA, float** 
 
     for (int i = 0; i <M ; ++i) {
         for (int j = 0; j <count ; ++j) {
-            D_HAT[0][M*i+j]=D_hat[i][j];
+            D_HAT[0][count*i+j]=D_hat[i][j];
         }
     }
 
+    for (int i = 0; i <M ; ++i) {
+        for (int j = 0; j <count ; ++j) {
+            printf("%f ",D_hat[j][i]);
+        }
+        printf("\n");
+    }
 }

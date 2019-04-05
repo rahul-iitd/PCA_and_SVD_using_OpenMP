@@ -565,11 +565,11 @@ void PCA(int retention, int M, int N, float* D, float* U, float* SIGMA, float** 
         }
     }
 
-    printf("K is %d\n",*K);
-    for (int i = 0; i <M ; ++i) {
-        for (int j = 0; j <count ; ++j) {
-            printf("%f ",D_hat[i][j]);
-        }
-        printf("\n");
-    }
+//    printf("K is %d\n",*K);
+//    for (int i = 0; i <M ; ++i) {
+//        for (int j = 0; j <count ; ++j) {
+//            printf("%f ",D_hat[i][j]);
+//        }
+//        printf("\n");
+//    }
 }
